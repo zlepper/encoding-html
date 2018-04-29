@@ -12,7 +12,7 @@ import (
 )
 
 // Parses the html into nodes
-func ParseHtml(reader io.Reader) (*html.Node, error) {
+func parseHtml(reader io.Reader) (*html.Node, error) {
 	doc, err := html.Parse(reader)
 	return doc, err
 }
@@ -31,7 +31,7 @@ func NewDecoder(reader io.Reader) *Decoder {
 // uses reflection
 // Also doesn't stream content, so watch your memory.
 func (d *Decoder) Decode(v interface{}) error {
-	root, err := ParseHtml(d.reader)
+	root, err := parseHtml(d.reader)
 	if err != nil {
 		return err
 	}
@@ -47,12 +47,16 @@ func (d *Decoder) Decode(v interface{}) error {
 	return err
 }
 
+// Unmarshals the html in b into the given pointer in v
+func Unmarshal(b []byte, v interface{}) error {
+	return NewDecoder(bytes.NewReader(b)).Decode(v)
+}
+
 func processField(field reflectableField, node *html.Node) error {
 	// Get the tag
 	cssSelector, ok := field.field.Tag.Lookup(CSS)
 	// Only parse if known tag
 	if ok {
-		how := field.getTagOrDefault(EXTRACT, TEXT)
 		nodes, err := getNodes(node, cssSelector)
 		if err != nil {
 			return err
@@ -61,7 +65,7 @@ func processField(field reflectableField, node *html.Node) error {
 		switch {
 		// For slice we should operate on all
 		case field.isSlice():
-			return processSlice(field.value, nodes, how)
+			return processSlice(field.value, nodes, field.field.Tag)
 
 			// For structs we should work recursive
 		case field.isStruct():
@@ -73,7 +77,7 @@ func processField(field reflectableField, node *html.Node) error {
 			// For anything else, we should just set the value
 		default:
 			if len(nodes) > 0 {
-				return setValue(field.value, nodes[0], how)
+				return setValue(field.value, nodes[0], field.field.Tag)
 			}
 		}
 	}
@@ -81,7 +85,7 @@ func processField(field reflectableField, node *html.Node) error {
 }
 
 // At this point the field should be a slice
-func processSlice(v reflect.Value, nodes []*html.Node, how string) error {
+func processSlice(v reflect.Value, nodes []*html.Node, tag reflect.StructTag) error {
 	if v.Kind() != reflect.Slice {
 		return errors.New("field is not a slice")
 	}
@@ -103,7 +107,7 @@ func processSlice(v reflect.Value, nodes []*html.Node, how string) error {
 		processSlicePart = processStruct
 	case reflect.String, reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128:
 		processSlicePart = func(v reflect.Value, node *html.Node) error {
-			return setValue(v, node, how)
+			return setValue(v, node, tag)
 		}
 	case reflect.Ptr:
 		processSlicePart = func(v reflect.Value, node *html.Node) error {
@@ -126,7 +130,6 @@ func processSlice(v reflect.Value, nodes []*html.Node, how string) error {
 func processStruct(s reflect.Value, node *html.Node) error {
 	fields := getFields(s)
 	for _, field := range fields {
-		fmt.Printf("Processing field %s for struct", field.field.Name)
 		err := processField(field, node)
 		if err != nil {
 			return err
@@ -135,27 +138,36 @@ func processStruct(s reflect.Value, node *html.Node) error {
 	return nil
 }
 
-func processPtr(ptr reflect.Value, nodes []*html.Node, how string) error {
+func processPtr(ptr reflect.Value, nodes []*html.Node, tag reflect.StructTag) error {
 	v := ptr.Elem()
-	println(ptr.CanInterface())
 	switch v.Kind() {
 	case reflect.Struct:
 		if len(nodes) > 0 {
 			return processStruct(v, nodes[0])
 		}
 	case reflect.Slice:
-		return processSlice(v, nodes, how)
+		return processSlice(v, nodes, tag)
 	default:
 		return errors.New(fmt.Sprintf("unknown underlying pointer type: '%s'", v.Kind().String()))
 	}
 	return nil
 }
 
-func setValue(v reflect.Value, node *html.Node, how string) error {
+func setValue(v reflect.Value, node *html.Node, tag reflect.StructTag) error {
+	how := tag.Get(EXTRACT)
+	if how == "" {
+		how = TEXT
+	}
 	var text string
 	switch how {
 	case TEXT:
 		text = getNodeText(node)
+	case ATTRIBUTE:
+		key := tag.Get(ATTRIBUTE)
+		if key == "" {
+			return errors.New("no attribute specified for attribute extraction")
+		}
+		text = getNodeAttribute(node, key)
 	default:
 		return errors.New(fmt.Sprintf("unknown how format: '%s'", how))
 	}
@@ -224,4 +236,15 @@ func getNodeText(node *html.Node) string {
 	f(node)
 
 	return buf.String()
+}
+
+// Gets the specified attribute from the node
+// if the attribute cannot be found, returns an empty string
+func getNodeAttribute(node *html.Node, attributeKey string) string {
+	for _, attribute := range node.Attr {
+		if attribute.Key == attributeKey {
+			return attribute.Val
+		}
+	}
+	return ""
 }

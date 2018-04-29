@@ -104,6 +104,23 @@ func TestLoadIntoStructWithStructSlice(t *testing.T) {
 	assert.Equal(t, "Bazooka", c.Bar[1].Baz)
 }
 
+func TestLoadFromAttribute(t *testing.T) {
+	type attrStruct struct {
+		Foo  string `css:".foo"`
+		Link string `css:".foo" extract:"attr" attr:"href"`
+	}
+
+	//language=html
+	html := `<body><a class="foo" href="http://github.com/zlepper/encoding-html">Link to encoding-html on GitHub</a></body>`
+
+	var a attrStruct
+	err := Unmarshal([]byte(html), &a)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "Link to encoding-html on GitHub", a.Foo)
+	assert.Equal(t, "http://github.com/zlepper/encoding-html", a.Link)
+}
+
 // Odd edgecases that I want to make sure are handled
 func TestLoadIntoStructWithSlicePointers(t *testing.T) {
 	return
