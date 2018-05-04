@@ -216,6 +216,100 @@ func TestCanDecodeAllStandardTypes(t *testing.T) {
 	assert.Equal(t, uint64(18446744073709551615), s.UInt64)
 }
 
+func TestDefaultValues(t *testing.T) {
+	type allTypesStruct struct {
+		Bool bool `css:".bool" default:"true"`
+
+		Byte byte `css:".byte" default:"1"`
+
+		Float32 float32 `css:".float32" default:"5.5"`
+		Float64 float64 `css:".float64" default:"4.566666"`
+
+		Int   int   `css:".int" default:"4"`
+		Int8  int8  `css:".int8" default:"127"`
+		Int16 int16 `css:".int16" default:"32767"`
+		Int32 int32 `css:".int32" default:"2147483647"`
+		Int64 int64 `css:".int64" default:"9223372036854775807"`
+
+		String string `css:".string" default:"Some aweasome string"`
+
+		UInt   uint   `css:".uint" default:"4294967295"`
+		UInt8  uint8  `css:".uint8" default:"255"`
+		UInt16 uint16 `css:".uint16" default:"65535"`
+		UInt32 uint32 `css:".uint32" default:"4294967295"`
+		UInt64 uint64 `css:".uint64" default:"18446744073709551615"`
+	}
+
+	//language=html
+	html := `<body></body>`
+
+	var s allTypesStruct
+	err := NewDecoder(strings.NewReader(html)).Decode(&s)
+
+	assert.NoError(t, err)
+	assert.Equal(t, true, s.Bool)
+	assert.Equal(t, byte(1), s.Byte)
+	assert.Equal(t, float32(5.5), s.Float32)
+	assert.Equal(t, float64(4.566666), s.Float64)
+	assert.Equal(t, int(4), s.Int)
+	assert.Equal(t, int8(127), s.Int8)
+	assert.Equal(t, int16(32767), s.Int16)
+	assert.Equal(t, int32(2147483647), s.Int32)
+	assert.Equal(t, int64(9223372036854775807), s.Int64)
+	assert.Equal(t, "Some aweasome string", s.String)
+	assert.Equal(t, uint(4294967295), s.UInt)
+	assert.Equal(t, uint8(255), s.UInt8)
+	assert.Equal(t, uint16(65535), s.UInt16)
+	assert.Equal(t, uint32(4294967295), s.UInt32)
+	assert.Equal(t, uint64(18446744073709551615), s.UInt64)
+}
+
+func TestDefaultValuesForChildStructWhereParentIsMissing(t *testing.T) {
+	type Case struct {
+		Foo string `css:".foo" default:"Hello"`
+		Bar struct {
+			Baz string `css:".baz" default:"world"`
+		} `css:".bar"`
+	}
+
+	//language=html
+	html := `<body></body>`
+
+	var c Case
+	err := Unmarshal([]byte(html), &c)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "Hello", c.Foo)
+	assert.Equal(t, "world", c.Bar.Baz)
+}
+
+func TestDefaultValueWhenParsingFails(t *testing.T) {
+	type Case struct {
+		Int   int     `css:".int" default:"42"`
+		Uint  uint    `css:".uint" default:"42"`
+		Float float64 `css:".float" default:"42.5"`
+		Bool  bool    `css:".bool" default:"true"`
+	}
+
+	//language=html
+	html := `<body>
+<p class="int">something</p>
+<p class="uint">something</p>
+<p class="float">something</p>
+<p class="bool">something</p>
+</body>`
+
+	var c Case
+
+	err := Unmarshal([]byte(html), &c)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 42, c.Int)
+	assert.Equal(t, uint(42), c.Uint)
+	assert.Equal(t, 42.5, c.Float)
+	assert.Equal(t, true, c.Bool)
+}
+
 func TestInvalidCSSSelector(t *testing.T) {
 	type TestStruct struct {
 		Foo string `css:"...foo"`

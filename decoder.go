@@ -72,12 +72,16 @@ func processField(field reflectableField, node *html.Node) error {
 			// Just take the first match
 			if len(nodes) > 0 {
 				return processStruct(field.value, nodes[0])
+			} else {
+				return processStruct(field.value, &html.Node{})
 			}
 
 			// For anything else, we should just set the value
 		default:
 			if len(nodes) > 0 {
 				return setValue(field.value, nodes[0], field.field.Tag)
+			} else {
+				return setValue(field.value, &html.Node{}, field.field.Tag)
 			}
 		}
 	}
@@ -159,6 +163,7 @@ func setValue(v reflect.Value, node *html.Node, tag reflect.StructTag) error {
 		how = TEXT
 	}
 	var text string
+
 	switch how {
 	case TEXT:
 		text = getNodeText(node)
@@ -172,36 +177,87 @@ func setValue(v reflect.Value, node *html.Node, tag reflect.StructTag) error {
 		return errors.New(fmt.Sprintf("unknown how format: '%s'", how))
 	}
 
+	// In this case we should return to a default value and use that, if specified
+	if text == "" {
+		defaultValue, ok := tag.Lookup(DEFAULT)
+		if ok {
+			text = defaultValue
+		}
+	}
+
 	switch v.Kind() {
 	case reflect.String:
 		v.SetString(text)
 	case reflect.Bool:
-		b, err := strconv.ParseBool(text)
-		if err != nil {
-			return err
-		}
-		v.SetBool(b)
+		return trySetBool(v, text, tag)
 	case reflect.Float32, reflect.Float64:
-		f, err := strconv.ParseFloat(text, 64)
-		if err != nil {
-			return err
-		}
-		v.SetFloat(f)
+		return trySetFloat(v, text, tag)
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		i, err := strconv.ParseInt(text, 10, 64)
-		if err != nil {
-			return err
-		}
-		v.SetInt(i)
+		return trySetInt(v, text, tag)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		i, err := strconv.ParseUint(text, 10, 64)
-		if err != nil {
-			return err
-		}
-		v.SetUint(i)
+		return trySetUInt(v, text, tag)
 	default:
 		return errors.New(fmt.Sprintf("unknown value kind: '%s'", v.Kind().String()))
 	}
+	return nil
+}
+
+// Tries to set a bool
+func trySetBool(v reflect.Value, text string, tag reflect.StructTag) error {
+	b, err := strconv.ParseBool(text)
+	if err != nil {
+		defaultValue, ok := tag.Lookup(DEFAULT)
+		if ok {
+			b, err = strconv.ParseBool(defaultValue)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	v.SetBool(b)
+	return nil
+}
+
+func trySetFloat(v reflect.Value, text string, tag reflect.StructTag) error {
+	f, err := strconv.ParseFloat(text, 64)
+	if err != nil {
+		defaultValue, ok := tag.Lookup(DEFAULT)
+		if ok {
+			f, err = strconv.ParseFloat(defaultValue, 64)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	v.SetFloat(f)
+	return nil
+}
+func trySetInt(v reflect.Value, text string, tag reflect.StructTag) error {
+	i, err := strconv.ParseInt(text, 10, 64)
+	if err != nil {
+		defaultValue, ok := tag.Lookup(DEFAULT)
+		if ok {
+			i, err = strconv.ParseInt(defaultValue, 10, 64)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	v.SetInt(i)
+	return nil
+}
+func trySetUInt(v reflect.Value, text string, tag reflect.StructTag) error {
+	i, err := strconv.ParseUint(text, 10, 64)
+	if err != nil {
+		defaultValue, ok := tag.Lookup(DEFAULT)
+		if ok {
+			i, err = strconv.ParseUint(defaultValue, 10, 64)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	v.SetUint(i)
 	return nil
 }
 

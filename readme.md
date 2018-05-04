@@ -72,8 +72,21 @@ using the `attr` tag.
 If `extract` is not specified, text will be selected.
 If an unknown option is specified, an error will be returning from the decode call.
 
+The extracted values will automatically be parsed into the requested type using the
+`strconv.ParseFloat|Int|Bool|UInt()` function in the standard library. If the value
+cannot be parsed, and no `default` value has been provided, the entire decode will
+return an error.
+
 #### `attr`
 Specifies what attribute should be extracted from the matching html element.
 If `extract:"attr"` is specified, and this tag is not, an error will be returned.
 If the attribute does not exist on the element, the empty string `""` will be considered the value
 of the attribute.
+
+### `default`
+Specifies a default value that should be set, provided the selected content
+was a zero value, or that the actual content could no be converted into the
+specified type.
+
+If the default value cannot be converted, the entire parsing will fail and
+return an error.
