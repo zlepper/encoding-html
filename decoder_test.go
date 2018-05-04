@@ -310,6 +310,33 @@ func TestDefaultValueWhenParsingFails(t *testing.T) {
 	assert.Equal(t, true, c.Bool)
 }
 
+func TestDefaultValueConversionFailing(t *testing.T) {
+	type Case struct {
+		Int   int     `css:".int" default:"something"`
+		Uint  uint    `css:".uint" default:"something"`
+		Float float64 `css:".float" default:"something"`
+		Bool  bool    `css:".bool" default:"something"`
+	}
+
+	//language=html
+	html := `<body>
+<p class="int">something</p>
+<p class="uint">something</p>
+<p class="float">something</p>
+<p class="bool">something</p>
+</body>`
+
+	var c Case
+
+	err := Unmarshal([]byte(html), &c)
+
+	assert.Error(t, err)
+	assert.Zero(t, c.Int)
+	assert.Zero(t, c.Uint)
+	assert.Zero(t, c.Float)
+	assert.Zero(t, c.Bool)
+}
+
 func TestInvalidCSSSelector(t *testing.T) {
 	type TestStruct struct {
 		Foo string `css:"...foo"`
@@ -338,4 +365,41 @@ func TestErrorShouldHappenWhenExtractAttrButNoAttribute(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, "", f.Foo)
+}
+
+func TestFailIfVArgumentWasNotPointer(t *testing.T) {
+	type Case struct {
+		Foo string
+	}
+
+	var c Case
+	err := Unmarshal([]byte("<body></body>"), c)
+	assert.Error(t, err)
+}
+
+func TestFieldWithoutSelectorShouldBeSkipped(t *testing.T) {
+	type Case struct {
+		Foo string
+	}
+
+	//language=html
+	html := `<body><p class="foo">Foo</p></body>`
+
+	var c Case
+	err := Unmarshal([]byte(html), &c)
+	assert.NoError(t, err)
+}
+
+func TestUnknownExtractFormatShouldFail(t *testing.T) {
+	type Case struct {
+		Foo string `css:".foo" extract:"bar"`
+	}
+
+	//language=html
+	html := `<body><p class="foo">Foo</p></body>`
+
+	var c Case
+	err := Unmarshal([]byte(html), &c)
+	assert.Error(t, err)
+	assert.Equal(t, "", c.Foo)
 }
