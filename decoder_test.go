@@ -215,3 +215,33 @@ func TestCanDecodeAllStandardTypes(t *testing.T) {
 	assert.Equal(t, uint32(4294967295), s.UInt32)
 	assert.Equal(t, uint64(18446744073709551615), s.UInt64)
 }
+
+func TestInvalidCSSSelector(t *testing.T) {
+	type TestStruct struct {
+		Foo string `css:"...foo"`
+	}
+
+	//language=html
+	html := `<body><p class="foo">Foo</p></body>`
+
+	var f TestStruct
+	err := Unmarshal([]byte(html), &f)
+
+	assert.Error(t, err)
+	assert.Equal(t, "", f.Foo)
+}
+
+func TestErrorShouldHappenWhenExtractAttrButNoAttribute(t *testing.T) {
+	type TestStruct struct {
+		Foo string `css:".foo" extract:"attr"`
+	}
+
+	//language=html
+	html := `<body><p class="foo" data-stuffs="Bar">Foo</p></body>`
+
+	var f TestStruct
+	err := Unmarshal([]byte(html), &f)
+
+	assert.Error(t, err)
+	assert.Equal(t, "", f.Foo)
+}
